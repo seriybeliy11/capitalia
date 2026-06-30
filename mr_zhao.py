@@ -5,6 +5,10 @@ import random
 import requests
 from config_zhao import BOT_TOKEN, DIFY_API_KEY, DIFY_URL
 
+BOT_TOKEN = BOT_TOKEN
+DIFY_API_KEY = DIFY_API_KEY
+DIFY_URL =  DIFY_URL
+
 # --- КОНФИГУРАЦИЯ ---
 CSV_FILE = "database.csv"
 
