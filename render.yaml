@@ -1,0 +1,44 @@
+# Render Blueprint — деплой Telegram-бота как Background Worker.
+# Документация: https://render.com/docs/blueprint-spec
+#
+# После push'а в git подключите репозиторий на Render → New Blueprint →
+# выберите этот файл. Render создаст сервис автоматически.
+# Секреты (TELEGRAM_BOT_TOKEN, PROJECT_UUID, API_KEY, ADMIN_IDS) задайте
+# в Environment-переменных сервиса на Render.
+
+services:
+  - type: worker
+    name: tg-bot-2328
+    runtime: python
+    pythonVersion: "3.11"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false          # задай вручную в Render
+      - key: PROJECT_UUID
+        sync: false          # Project UUID из 2328.io
+      - key: API_KEY
+        sync: false          # API key из 2328.io
+      - key: ADMIN_IDS
+        sync: false          # Telegram user_id через запятую
+      - key: DEFAULT_CURRENCY
+        value: USD
+      - key: DEFAULT_TTL
+        value: "3600"
+      - key: LIST_LIMIT
+        value: "10"
+      - key: LONG_POLL_TIMEOUT
+        value: "30"
+      - key: REQUEST_TIMEOUT
+        value: "30"
+      - key: CALLBACK_URL
+        sync: false
+      - key: SUCCESS_URL
+        sync: false
+      - key: RETURN_URL
+        sync: false
+    # Render автоматически перезапускает worker при падении.
+    autoDeploy: true
