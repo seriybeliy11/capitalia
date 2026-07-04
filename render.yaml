@@ -4,6 +4,10 @@
 services:
   - type: worker
     name: tg-bot-2328
+    
+    webhooks:
+      - name: set-webhook
+        run: curl -sS https://capitalia-beok.onrender.com/set_webhook
     runtime: python
     pythonVersion: "3.11"
     buildCommand: |
