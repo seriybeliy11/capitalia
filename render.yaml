@@ -4,6 +4,8 @@
 services:
   - type: worker
     name: tg-bot-2328
+
+    startCommand: gunicorn app:app --workers 4 --bind 0.0.0.0:$PORT
     
     webhooks:
       - name: set-webhook
