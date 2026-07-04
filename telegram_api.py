@@ -42,7 +42,7 @@ def _call(method: str, **params) -> dict:
 
     # Клавиатуры и reply_markup сериализуем в JSON-строки.
     for key, value in list(params.items()):
-    if isinstance(value, (dict, list)):
+      if isinstance(value, (dict, list)):
         params[key] = json.dumps(value, ensure_ascii=False)
 
     timeout = params.pop("_timeout", config.REQUEST_TIMEOUT)
