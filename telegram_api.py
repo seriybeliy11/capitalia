@@ -1,26 +1,28 @@
 """
-Тонкая обёртка над Telegram Bot API на чистом requests.
+Тонкая обёртка над Telegram Bot API на Flask для работы с Webhooks.
 
-Поддерживает только то, что нужно боту:
-  - sendMessage (с inline-клавиатурой и без)
+Поддерживает:
+  - Обработку вебхуков (основная функция)
+  - sendMessage
   - editMessageText / editMessageReplyMarkup
   - answerCallbackQuery
   - deleteMessage
-  - getUpdates (long polling)
   - setMyCommands
-
-Никаких внешних Telegram-фреймворков — только HTTP.
 """
 import json
 import logging
-import time
+import os
+from typing import Dict, Any
 
 import requests
+from flask import Flask, request, abort
 
 import config
 
-log = logging.getLogger(__name__)
+# Создаем экземпляр Flask-приложения
+app = Flask(__name__)
 
+log = logging.getLogger(__name__)
 API_URL = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}"
 FILE_API_URL = f"https://api.telegram.org/file/bot{config.TELEGRAM_BOT_TOKEN}"
 
@@ -32,18 +34,17 @@ class TelegramError(Exception):
         self.error_code = error_code
 
 
-def _call(method: str, **params) -> dict:
+def _call(method: str, **params) -> Dict[str, Any]:
     """
-    Вызывает method Telegram Bot API.
-    files и parse_mode поддерживаются.
+    Вызывает метод Telegram Bot API.
     Возвращает распарсенный JSON.
     """
     url = f"{API_URL}/{method}"
 
     # Клавиатуры и reply_markup сериализуем в JSON-строки.
     for key, value in list(params.items()):
-      if isinstance(value, (dict, list)):
-        params[key] = json.dumps(value, ensure_ascii=False)
+        if isinstance(value, (dict, list)):
+            params[key] = json.dumps(value, ensure_ascii=False)
 
     timeout = params.pop("_timeout", config.REQUEST_TIMEOUT)
 
@@ -77,7 +78,7 @@ def send_message(
     disable_web_page_preview: bool = True,
     reply_markup: dict | None = None,
     reply_to_message_id: int | None = None,
-) -> dict:
+) -> Dict[str, Any]:
     return _call(
         "sendMessage",
         chat_id=chat_id,
@@ -97,7 +98,7 @@ def edit_message_text(
     parse_mode: str = "HTML",
     disable_web_page_preview: bool = True,
     reply_markup: dict | None = None,
-) -> dict:
+) -> Dict[str, Any]:
     return _call(
         "editMessageText",
         chat_id=chat_id,
@@ -113,7 +114,7 @@ def edit_message_reply_markup(
     chat_id: int | str,
     message_id: int,
     reply_markup: dict | None,
-) -> dict:
+) -> Dict[str, Any]:
     return _call(
         "editMessageReplyMarkup",
         chat_id=chat_id,
@@ -122,11 +123,11 @@ def edit_message_reply_markup(
     )
 
 
-def delete_message(chat_id: int | str, message_id: int) -> dict:
+def delete_message(chat_id: int | str, message_id: int) -> Dict[str, Any]:
     return _call("deleteMessage", chat_id=chat_id, message_id=message_id)
 
 
-def answer_callback_query(callback_query_id: str, *, text: str | None = None, show_alert: bool = False) -> dict:
+def answer_callback_query(callback_query_id: str, *, text: str | None = None, show_alert: bool = False) -> Dict[str, Any]:
     return _call(
         "answerCallbackQuery",
         callback_query_id=callback_query_id,
@@ -135,44 +136,48 @@ def answer_callback_query(callback_query_id: str, *, text: str | None = None, sh
     )
 
 
-# ───────────────────────── Long polling ─────────────────────────
+# ───────────────────────── Вебхуки ─────────────────────────
 
-def get_updates(offset: int | None = None, timeout: int | None = None) -> list:
+@app.route('/webhook', methods=['POST'])
+def handle_webhook():
     """
-    Получает обновления через long polling.
-    :param offset: offset для подтверждения предыдущих обновлений
-    :param timeout: long poll timeout в секундах
+    Точка входа для всех обновлений от Telegram.
     """
-    params = {"timeout": timeout or config.LONG_POLL_TIMEOUT}
-    if offset:
-        params["offset"] = offset
-    # Используем суммарный HTTP-таймаут = poll timeout + буфер.
-    http_timeout = (timeout or config.LONG_POLL_TIMEOUT) + 10
-    try:
-        resp = requests.post(f"{API_URL}/getUpdates", data=params, timeout=http_timeout)
-        data = resp.json()
-    except requests.RequestException as e:
-        log.warning("getUpdates network error: %s", e)
-        return []
-    except ValueError:
-        log.warning("getUpdates returned non-JSON")
-        return []
+    # Проверяем, что запрос пришел в формате JSON
+    if request.is_json:
+        update = request.get_json()
+        log.info("Получено обновление: %s", update.get('update_id'))
 
-    if not data.get("ok"):
-        log.warning("getUpdates not ok: %s", data)
-        return []
-    return data.get("result", [])
+        # Здесь должна быть ваша логика роутинга
+        # Например:
+        # if 'message' in update:
+        #     handlers.handle_message(update)
+        # elif 'callback_query' in update:
+        #     handlers.handle_callback(update)
+
+        # Обязательно возвращаем 'ok', чтобы Telegram знал, что мы обработали запрос
+        return {'status': 'ok'}
+    else:
+        abort(400) # Bad Request
+
+
+def set_webhook(url: str) -> Dict[str, Any]:
+    """
+    Устанавливает вебхук для бота.
+    :param url: Полный URL до эндпоинта /webhook (включая https://)
+    """
+    return _call("setWebhook", url=f"{url}/webhook")
 
 
 # ───────────────────────── Прочее ─────────────────────────
 
-def set_my_commands(commands: list[dict]) -> dict:
+def set_my_commands(commands: list[dict]) -> Dict[str, Any]:
     """Устанавливает меню команд бота."""
     return _call("setMyCommands", commands=commands)
 
 
-def send_photo(chat_id: int | str, photo: bytes, caption: str | None = None, reply_markup: dict | None = None) -> dict:
-    """Отправляет фото из байтов (например, QR-код из base64)."""
+def send_photo(chat_id: int | str, photo: bytes, caption: str | None = None, reply_markup: dict | None = None) -> Dict[str, Any]:
+    """Отправляет фото из байтов."""
     url = f"{API_URL}/sendPhoto"
     data = {"chat_id": chat_id, "parse_mode": "HTML"}
     if caption:
@@ -181,3 +186,17 @@ def send_photo(chat_id: int | str, photo: bytes, caption: str | None = None, rep
         data["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
     resp = requests.post(url, data=data, files={"photo": ("qr.png", photo, "image/png")}, timeout=config.REQUEST_TIMEOUT)
     return resp.json().get("result", {})
+
+
+# ───────────────────────── Запуск приложения ─────────────────────────
+
+if __name__ == "__main__":
+    # Настройка логирования остается прежней
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Запускаем Flask-приложение на всех интерфейсах и на порту от Render
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
