@@ -36,50 +36,50 @@ def route_update(update: dict):
     try:
         if "message" in update:
             msg = update["message"]
-            text = (msg.get("text") or "").strip()
             chat_id = msg.get("chat", {}).get("id")
             user_id = msg.get("from", {}).get("id")
 
-            # Если пользователь в каком-то состоянии — сначала обрабатываем FSM.
-            if (
-                user_id
-                and state.get_state(user_id) != state.STATE_IDLE
-                and not text.startswith("/")
-            ):
+            # --- НАЧАЛО НОВОГО БЛОКА ---
+            # Определяем, является ли сообщение командой
+            is_command = False
+
+            # 1. Проверяем, есть ли текст и начинается ли он с "/"
+            text = msg.get("text")
+            if text and text.startswith("/"):
+                is_command = True
+
+            # 2. Проверяем entities (на случай, если команда пришла без текста, например, через меню)
+            entities = msg.get("entities")
+            if not is_command and entities and isinstance(entities, list):
+                for entity in entities:
+                    if entity.get("type") == "bot_command":
+                        is_command = True
+                        break
+            # --- КОНЕЦ НОВОГО БЛОКА ---
+
+            # Логика состояния (FSM) теперь использует флаг is_command
+            if user_id and state.get_state(user_id) != state.STATE_IDLE and not is_command:
                 handlers.handle_text(update)
                 return
 
-            # Команды.
-            if text.startswith("/"):
-                cmd = text.split()[0].lower().split("@")[0]
-                if cmd in ("/start", "/help", "/pay", "/status", "/list", "/cancel"):
-                    {
-                        "/start":  handlers.cmd_start,
-                        "/help":   handlers.cmd_help,
-                        "/pay":    handlers.cmd_pay,
-                        "/status": handlers.cmd_status,
-                        "/list":   handlers.cmd_list,
-                        "/cancel": handlers.cmd_cancel,
-                    }[cmd](update)
+            # Обработка команд с использованием нового флага
+            if is_command:
+                # Извлекаем команду безопасно
+                cmd = text.split()[0].lower().split("@")[0] if text else ""
+                if cmd == "/start":
+                    handlers.cmd_start(update)
                     return
-                # Неизвестная команда.
-                telegram_api.send_message(
-                    chat_id,
-                    f"Неизвестная команда: <code>{cmd}</code>. Напиши /help.",
-                )
-                return
 
-            # Обычный текст (без состояния).
             handlers.handle_text(update)
             return
 
-        if "callback_query" in update:
+        elif "callback_query" in update:
             handlers.handle_callback(update)
             return
 
         log.debug("Unknown update type, skipping: %s", list(update.keys()))
-    except Exception:  # noqa: BLE001
-        log.exception("route_update failed")
+    except Exception as e: # noqa: BLE001
+        log.exception("route_update failed: %s", e)
 
 
 # ───────────────────────── Вебхук для Telegram ─────────────────────────
