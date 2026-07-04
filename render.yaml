@@ -1,29 +1,27 @@
 # Render Blueprint — деплой Telegram-бота как Background Worker.
 # Документация: https://render.com/docs/blueprint-spec
-#
-# После push'а в git подключите репозиторий на Render → New Blueprint →
-# выберите этот файл. Render создаст сервис автоматически.
-# Секреты (TELEGRAM_BOT_TOKEN, PROJECT_UUID, API_KEY, ADMIN_IDS) задайте
-# в Environment-переменных сервиса на Render.
 
 services:
   - type: worker
     name: tg-bot-2328
     runtime: python
     pythonVersion: "3.11"
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11"
+      # Секреты (задаются вручную в панели Render)
       - key: TELEGRAM_BOT_TOKEN
-        sync: false          # задай вручную в Render
+        sync: false
       - key: PROJECT_UUID
-        sync: false          # Project UUID из 2328.io
+        sync: false
       - key: API_KEY
-        sync: false          # API key из 2328.io
+        sync: false
       - key: ADMIN_IDS
-        sync: false          # Telegram user_id через запятую
+        sync: false
+
+      # Переменные окружения (можно оставить здесь или задавать в Render)
       - key: DEFAULT_CURRENCY
         value: USD
       - key: DEFAULT_TTL
@@ -34,11 +32,16 @@ services:
         value: "30"
       - key: REQUEST_TIMEOUT
         value: "30"
-      - key: CALLBACK_URL
-        sync: false
-      - key: SUCCESS_URL
-        sync: false
-      - key: RETURN_URL
-        sync: false
-    # Render автоматически перезапускает worker при падении.
+
+      # Важные системные переменные для стабильности worker'а
+      - key: PYTHONUNBUFFERED
+        value: "1" # Отключает буферизацию вывода, чтобы логи в Render появлялись сразу
+      - key: RENDER_AUTO_DEPROVISION
+        value: "never" # (Опционально) Защищает от автоостановки при простое
+
+    # Автоматический деплой при изменениях в ветке
     autoDeploy: true
+
+    # (Опционально) Если у вас есть база данных, её можно подключить здесь
+    # database:
+    #   name: my-telegram-bot-db
