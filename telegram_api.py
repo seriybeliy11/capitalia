@@ -41,8 +41,9 @@ def _call(method: str, **params) -> dict:
     url = f"{API_URL}/{method}"
 
     # Клавиатуры и reply_markup сериализуем в JSON-строки.
-    if "reply_markup" in params and isinstance(params["reply_markup"], (dict, list)):
-        params["reply_markup"] = json.dumps(params["reply_markup"], ensure_ascii=False)
+    for key, value in list(params.items()):
+    if isinstance(value, (dict, list)):
+        params[key] = json.dumps(value, ensure_ascii=False)
 
     timeout = params.pop("_timeout", config.REQUEST_TIMEOUT)
 
